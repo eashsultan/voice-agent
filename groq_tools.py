@@ -266,7 +266,22 @@ class ChatSession:
     def _pruned_messages(self):
         if len(self.messages) <= MAX_HISTORY:
             return self.messages
-        return [self.messages[0]] + self.messages[-MAX_HISTORY:]
+            
+        slice_start = len(self.messages) - MAX_HISTORY
+        
+        # Ensure we always start the context window with a clean user message,
+        # avoiding orphaned tool responses or leading assistant messages.
+        while slice_start < len(self.messages):
+            msg = self.messages[slice_start]
+            role = get_msg_field(msg, "role")
+            if role == "user":
+                break
+            slice_start += 1
+            
+        if slice_start >= len(self.messages):
+            slice_start = len(self.messages) - 1
+            
+        return [self.messages[0]] + self.messages[slice_start:]
 
     def _call_resilient(self):
         if USE_GEMINI_NATIVE:
