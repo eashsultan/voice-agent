@@ -106,19 +106,26 @@ def convert_to_gemini_tools(openai_tools):
         })
     return [{"function_declarations": gemini_tools}]
 
+def get_msg_field(msg, field):
+    if hasattr(msg, "get"):
+        return msg.get(field)
+    return getattr(msg, field, None)
+
 def convert_to_gemini_contents(messages):
     contents = []
     for msg in messages:
-        role = msg.get("role")
+        role = get_msg_field(msg, "role")
         if role == "system":
             continue
             
         parts = []
-        if "content" in msg and msg["content"] is not None:
-            parts.append({"text": msg["content"]})
+        content = get_msg_field(msg, "content")
+        if content is not None:
+            parts.append({"text": content})
             
-        if "tool_calls" in msg and msg["tool_calls"]:
-            for tc in msg["tool_calls"]:
+        tool_calls = get_msg_field(msg, "tool_calls")
+        if tool_calls:
+            for tc in tool_calls:
                 fn_args = json.loads(tc.function.arguments) if isinstance(tc.function.arguments, str) else tc.function.arguments
                 parts.append({
                     "functionCall": {
@@ -131,8 +138,8 @@ def convert_to_gemini_contents(messages):
             role = "user"
             parts.append({
                 "functionResponse": {
-                    "name": msg.get("name") or "tool_call",
-                    "response": {"output": msg["content"]}
+                    "name": get_msg_field(msg, "name") or "tool_call",
+                    "response": {"output": content}
                 }
             })
             
