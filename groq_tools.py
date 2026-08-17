@@ -118,6 +118,8 @@ def convert_to_gemini_contents(messages):
         if role == "system":
             continue
             
+        gemini_role = "model" if role == "assistant" else "user"
+        
         parts = []
         content = get_msg_field(msg, "content")
         if content is not None:
@@ -140,7 +142,6 @@ def convert_to_gemini_contents(messages):
                 parts.append(part)
                 
         if role == "tool":
-            role = "user"
             parts.append({
                 "functionResponse": {
                     "name": get_msg_field(msg, "name") or "tool_call",
@@ -148,10 +149,15 @@ def convert_to_gemini_contents(messages):
                 }
             })
             
-        contents.append({
-            "role": "model" if role == "assistant" else "user",
-            "parts": parts
-        })
+        # Merge parts if the last turn in contents has the same role
+        if contents and contents[-1]["role"] == gemini_role:
+            contents[-1]["parts"].extend(parts)
+        else:
+            contents.append({
+                "role": gemini_role,
+                "parts": parts
+            })
+            
     return contents
 
 class MockFunction:
