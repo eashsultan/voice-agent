@@ -42,7 +42,7 @@ def handle_command(cmd: Command):
 from actions import get_weather
 
 @app.get("/weather")
-def get_current_weather(city: str = ""):
+def get_current_weather(city: str = "Gombe"):
     return {"weather": get_weather(city)}
 
 @app.get("/health")
