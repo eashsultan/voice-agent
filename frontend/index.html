@@ -272,9 +272,22 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 2rem;
-      color: #000;
       z-index: 5;
+    }
+
+    .core-orb {
+      width: 20px;
+      height: 20px;
+      background: #fff;
+      border-radius: 50%;
+      box-shadow: 0 0 15px var(--primary-cyan);
+      transition: all 0.3s ease;
+      animation: orb-breathe 2s ease-in-out infinite alternate;
+    }
+
+    @keyframes orb-breathe {
+      0% { transform: scale(0.9); opacity: 0.8; }
+      100% { transform: scale(1.1); opacity: 1; }
     }
 
     .hud-status-text {
@@ -669,7 +682,7 @@
         <canvas id="visualizerCanvas" width="220" height="220" style="position: absolute; pointer-events: none; z-index: 2;"></canvas>
         <div class="arc-ring arc-ring-outer"></div>
         <div class="arc-ring arc-ring-inner"></div>
-        <div class="arc-core">🎙️</div>
+        <div class="arc-core"><div class="core-orb"></div></div>
       </div>
       <div class="hud-status-text" id="statusLabel">TAP CORE TO INITIALIZE</div>
     </main>
@@ -808,17 +821,6 @@
       };
       statusLabel.textContent = hints[state] || 'TAP CORE TO INITIALIZE';
 
-      // Update core icon
-      const core = document.querySelector('.arc-core');
-      if (state === 'listening') {
-        core.textContent = '🔊';
-      } else if (state === 'thinking') {
-        core.textContent = '⚡';
-      } else if (state === 'speaking') {
-        core.textContent = '🎙️';
-      } else {
-        core.textContent = '💤';
-      }
     }
 
     function logToTerminal(sender, message) {
@@ -1034,11 +1036,22 @@
       };
       
       recognition.onresult = async (event) => {
-        const transcript = event.results[0][0].transcript;
-        if (!transcript.trim()) return;
-        logToTerminal('USER', transcript);
-        setUIState('thinking');
-        await processCommand(transcript);
+        const rawTranscript = event.results[0][0].transcript;
+        const transcript = rawTranscript.toLowerCase().trim();
+        if (!transcript) return;
+        
+        if (!active) {
+          // Wakeword detection
+          if (transcript.includes('jarvis') || transcript.includes('wake up') || transcript.includes('wakeup') || transcript.includes('hey')) {
+            logToTerminal('USER', rawTranscript);
+            toggleActive();
+          }
+        } else {
+          // Active session commands
+          logToTerminal('USER', rawTranscript);
+          setUIState('thinking');
+          await processCommand(rawTranscript);
+        }
       };
       
       recognition.onerror = (e) => {
@@ -1046,8 +1059,11 @@
       };
       
       recognition.onend = () => {
-        if (active && !isSpeaking) setTimeout(startMic, 300);
+        if (!isSpeaking) setTimeout(startMic, 300);
       };
+      
+      // Auto-start listening on page load for wake-word
+      setTimeout(startMic, 1000);
     }
 
     // ============================================================
