@@ -229,14 +229,19 @@ class ChatSession:
         if with_tools:
             payload["tools"] = convert_to_gemini_tools(TOOL_SCHEMAS)
             
+        import urllib.error
         req = urllib.request.Request(
             url,
             data=json.dumps(payload).encode("utf-8"),
             headers={"Content-Type": "application/json"}
         )
         
-        with urllib.request.urlopen(req) as res:
-            response = json.loads(res.read().decode("utf-8"))
+        try:
+            with urllib.request.urlopen(req) as res:
+                response = json.loads(res.read().decode("utf-8"))
+        except urllib.error.HTTPError as e:
+            err_body = e.read().decode("utf-8")
+            raise Exception(f"HTTP Error {e.code}: {e.reason} - {err_body}")
             
         return convert_gemini_response_to_openai(response)
 
