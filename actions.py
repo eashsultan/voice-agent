@@ -15,6 +15,7 @@ import urllib.request
 import urllib.parse
 import json
 import random
+import re
 
 # Safely mock mouseinfo to prevent tkinter dependencies on Linux
 import sys

@@ -2,4 +2,4 @@ fastapi
 uvicorn
 pyttsx3
 pyautogui
-google-generativeai
+openai
