@@ -666,6 +666,7 @@
     <!-- Center Screen: Core / Arc Reactor trigger -->
     <main class="hud-center">
       <div class="arc-reactor-container" id="reactorBtn" title="Activate JARVIS">
+        <canvas id="visualizerCanvas" width="220" height="220" style="position: absolute; pointer-events: none; z-index: 2;"></canvas>
         <div class="arc-ring arc-ring-outer"></div>
         <div class="arc-ring arc-ring-inner"></div>
         <div class="arc-core">🎙️</div>
@@ -836,6 +837,155 @@
       terminalOutput.scrollTop = terminalOutput.scrollHeight;
     }
 
+    // ============================================================
+    //  WEB AUDIO & SOUND EFFECTS
+    // ============================================================
+    let audioCtx = null;
+    
+    function playSound(type) {
+      try {
+        if (!audioCtx) {
+          audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        if (audioCtx.state === 'suspended') {
+          audioCtx.resume();
+        }
+        
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        
+        if (type === 'hover') {
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(800, audioCtx.currentTime);
+          osc.frequency.exponentialRampToValueAtTime(1200, audioCtx.currentTime + 0.05);
+          gain.gain.setValueAtTime(0.015, audioCtx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.05);
+          osc.start();
+          osc.stop(audioCtx.currentTime + 0.05);
+        } else if (type === 'click') {
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(500, audioCtx.currentTime);
+          osc.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.12);
+          gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.12);
+          osc.start();
+          osc.stop(audioCtx.currentTime + 0.12);
+        } else if (type === 'success') {
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(600, audioCtx.currentTime);
+          osc.frequency.setValueAtTime(900, audioCtx.currentTime + 0.08);
+          gain.gain.setValueAtTime(0.04, audioCtx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.25);
+          osc.start();
+          osc.stop(audioCtx.currentTime + 0.25);
+        }
+      } catch (e) {
+        console.warn("Audio Context blocked or unsupported: ", e);
+      }
+    }
+
+    function playHoverSound() {
+      playSound('hover');
+    }
+
+    function addHoverSounds() {
+      document.querySelectorAll('.shortcut-item, .check-item, .terminal-btn, .arc-reactor-container, input[type="checkbox"]').forEach(el => {
+        el.removeEventListener('mouseenter', playHoverSound);
+        el.addEventListener('mouseenter', playHoverSound);
+      });
+    }
+
+    // ============================================================
+    //  AUDIO VISUALIZER LOGIC
+    // ============================================================
+    let analyser = null;
+    let dataArray = null;
+    const visualizerCanvas = document.getElementById('visualizerCanvas');
+    const visCtx = visualizerCanvas.getContext('2d');
+    
+    async function initVisualizer() {
+      if (analyser) return;
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const actx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+        if (!audioCtx) audioCtx = actx;
+        
+        const source = actx.createMediaStreamSource(stream);
+        analyser = actx.createAnalyser();
+        analyser.fftSize = 64;
+        source.connect(analyser);
+        
+        const bufferLength = analyser.frequencyBinCount;
+        dataArray = new Uint8Array(bufferLength);
+        
+        drawVisualizer();
+      } catch (err) {
+        console.warn("Visualizer mic access denied or unavailable: ", err);
+        // Fall back to starting the draw loop anyway (for mock speech waves)
+        dataArray = new Uint8Array(32);
+        drawVisualizer();
+      }
+    }
+    
+    function drawVisualizer() {
+      requestAnimationFrame(drawVisualizer);
+      
+      const width = visualizerCanvas.width;
+      const height = visualizerCanvas.height;
+      visCtx.clearRect(0, 0, width, height);
+      
+      const cx = width / 2;
+      const cy = height / 2;
+      const radius = 76;
+      const numBars = dataArray ? dataArray.length : 32;
+      
+      if (analyser && active && !isSpeaking) {
+        analyser.getByteFrequencyData(dataArray);
+      } else if (isSpeaking) {
+        // Generate procedural audio waves to match JARVIS's voice
+        for (let i = 0; i < numBars; i++) {
+          dataArray[i] = Math.max(10, Math.sin(Date.now() * 0.008 + i) * 110 + 120) * (0.3 + Math.random() * 0.7);
+        }
+      } else {
+        // Ambient static breathing wave
+        for (let i = 0; i < numBars; i++) {
+          dataArray[i] = 10 + Math.sin(Date.now() * 0.002 + i) * 10;
+        }
+      }
+      
+      visCtx.lineWidth = 2.5;
+      
+      // Select visualizer color based on active state
+      let color = '#00f0ff';
+      if (document.body.classList.contains('state-thinking')) color = '#fbbf24';
+      if (document.body.classList.contains('state-speaking')) color = '#f43f5e';
+      if (document.body.classList.contains('state-disabled')) color = '#64748b';
+      
+      visCtx.strokeStyle = color;
+      visCtx.shadowBlur = 6;
+      visCtx.shadowColor = color;
+      
+      for (let i = 0; i < numBars; i++) {
+        const val = dataArray[i];
+        const percent = val / 255;
+        const barHeight = percent * 22; // max extended length
+        
+        const angle = (i / numBars) * Math.PI * 2;
+        const xStart = cx + Math.cos(angle) * radius;
+        const yStart = cy + Math.sin(angle) * radius;
+        const xEnd = cx + Math.cos(angle) * (radius + barHeight);
+        const yEnd = cy + Math.sin(angle) * (radius + barHeight);
+        
+        visCtx.beginPath();
+        visCtx.moveTo(xStart, yStart);
+        visCtx.lineTo(xEnd, yEnd);
+        visCtx.stroke();
+      }
+      visCtx.shadowBlur = 0;
+    }
+
     function startMic() {
       if (recognition && micSupported && !isSpeaking) {
         try { recognition.start(); } catch (e) {}
@@ -850,10 +1000,13 @@
 
     function toggleActive() {
       active = !active;
+      playSound('click');
       if (active) {
         setUIState('listening');
+        initVisualizer();
         speak("Jarvis online. Diagnostics check complete. How can I assist you today, sir?");
         startMic();
+        setTimeout(() => playSound('success'), 200);
       } else {
         setUIState('disabled');
         window.speechSynthesis.cancel();
@@ -863,6 +1016,7 @@
     }
 
     reactorBtn.addEventListener('click', toggleActive);
+    setTimeout(addHoverSounds, 1000);
 
     // ============================================================
     //  SPEECH RECOGNITION
