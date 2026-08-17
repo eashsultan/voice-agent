@@ -258,6 +258,7 @@ class ChatSession:
                 response = json.loads(res.read().decode("utf-8"))
         except urllib.error.HTTPError as e:
             err_body = e.read().decode("utf-8")
+            print("FAILED PAYLOAD:", json.dumps(payload, indent=2))
             raise Exception(f"HTTP Error {e.code}: {e.reason} - {err_body}")
             
         return convert_gemini_response_to_openai(response)
