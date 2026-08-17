@@ -1006,7 +1006,36 @@
       if (active) {
         setUIState('listening');
         initVisualizer();
-        speak("Jarvis online. Diagnostics check complete. How can I assist you today, sir?");
+        
+        // Retrieve current day, date, time
+        const now = new Date();
+        const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+        const dayName = days[now.getDay()];
+        const monthName = months[now.getMonth()];
+        const dateNum = now.getDate();
+        const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+        // Fetch live weather report
+        fetch('/weather')
+          .then(res => res.json())
+          .then(data => {
+            const weatherReport = data.weather || "weather data currently unavailable";
+            // Clean emojis and format weather text for smooth text-to-speech
+            const cleanWeather = weatherReport
+              .replace(/[^\w\s°C+-]/g, '')
+              .replace('+', ' plus ')
+              .replace('-', ' minus ')
+              .replace(/\s+/g, ' ')
+              .trim();
+            const greeting = `Hello Boss. Today is ${dayName}, ${monthName} ${dateNum}. The current time is ${timeString}. Meteorological status reports: ${cleanWeather}. All core systems online. I am fully operational and ready for your task.`;
+            speak(greeting);
+          })
+          .catch(() => {
+            const greeting = `Hello Boss. Today is ${dayName}, ${monthName} ${dateNum}. The current time is ${timeString}. Systems fully operational. I am ready for your task.`;
+            speak(greeting);
+          });
+
         startMic();
         setTimeout(() => playSound('success'), 200);
       } else {
